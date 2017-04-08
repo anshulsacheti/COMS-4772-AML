@@ -29,13 +29,14 @@ def generateChromosomeFile(chromNum, path):
     """
     #call(["convert","-coalesce",gif_path[idx],"gifs/"+tag+"/"+str(idx)+"/%05d.png"])
 
+    chromNum=str(chromNum)
     #Add columns
     with open(path+"chrom"+chromNum+".txt","w") as f:
-        f.write("rsID\tchromNum\tSNP\tAllele\n")
+        f.write("user\trsID\tchromNum\tSNP\tAllele\n")
 
     #Generate file with info from each other file
-    grep=subprocess.Popen("egrep -sh \"rs\d.*\t%s\t\" %s*23andme.txt >> ./testSet/chrom%s.txt" %
-                        (chromNum, path, chromNum),shell=True, stdout=subprocess.PIPE)
+    grep=subprocess.Popen("egrep -s \"rs\d.*\t%s\t\" %s*23andme.txt >> %schrom%s.txt" %
+                        (chromNum, path, path, chromNum),shell=True, stdout=subprocess.PIPE)
     grep.communicate()
 
     #Clean generate file of misc bad data
@@ -44,9 +45,16 @@ def generateChromosomeFile(chromNum, path):
         lines = f.readlines()
 
     with open(path+"chrom"+chromNum+".txt","w") as f:
-        pattern = re.compile('\S.*\t\S.*\t\S.*\t\S.*\t\S')
+        pattern = re.compile('\S.*\t\S.*\t\S.*\t\S.*\t\S.*\t\S')
         for l in lines:
             if not(pattern.match(l)):
+                splitLine=l.split("\t")
+                userFile = splitLine[0]; userFile=userFile.split("_")[0]
+                userFile = [userFile.split("/")[-1]]
+                rsID = [splitLine[0].split(":")[-1]]
+                userFile.extend(rsID)
+                userFile.extend(splitLine[1:])
+                l = "\t".join(userFile)
                 f.write(l)
 
 def generateChromosomeDF(chromNum, path):
@@ -56,9 +64,9 @@ def generateChromosomeDF(chromNum, path):
     chromNum: Chromosome number
     path: filePath to directory with 23andme files
 
-    Example of run: python genChromosomeTable.py 21 ./opensnp_txt_data/
+    Example of run: python genChromosomeTable.py 21 ./opensnp_txt_data
     """
-    df = pd.read_csv(filepath_or_buffer=path+"chrom"+chromNum+".txt",sep='\t', dtype=np.str)
+    df = pd.read_csv(filepath_or_buffer=path+"/chrom"+str(chromNum)+".txt",sep='\t', dtype=np.str)
     return df
 
 if __name__ == '__main__':
@@ -66,5 +74,4 @@ if __name__ == '__main__':
     chromNum = args.chrom[0]
     path = args.path[0]
     generateChromosomeFile(chromNum, path)
-    df = generateChromosomeDF(chromNum, path)
-    return df
+    #df = generateChromosomeDF(chromNum, path)
