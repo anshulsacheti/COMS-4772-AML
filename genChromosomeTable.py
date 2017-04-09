@@ -35,22 +35,28 @@ def generateChromosomeFile(chromNum, path):
         f.write("user\trsID\tchromNum\tSNP\tAllele\n")
 
     #Generate file with info from each other file
+    print("Running grep")
     grep=subprocess.Popen("egrep -s \"rs\d.*\t%s\t\" %s*23andme.txt >> %schrom%s.txt" %
                         (chromNum, path, path, chromNum),shell=True, stdout=subprocess.PIPE)
     grep.communicate()
 
     #Clean generate file of misc bad data
     #   1. Some lines have 5 values instead of 4
+    print("Creating file header")
     with open(path+"chrom"+chromNum+".txt","r") as f:
         lines = f.readlines()
 
+    print("Writing lines to file")
     with open(path+"chrom"+chromNum+".txt","w") as f:
-        pattern = re.compile('\S.*\t\S.*\t\S.*\t\S.*\t\S.*\t\S')
+        pattern = re.compile('\S.*\t\S.*\t\S.*\t\S.*\t\S.*\t\S.*')
         for l in lines:
             if not(pattern.match(l)):
                 splitLine=l.split("\t")
-                userFile = splitLine[0]; userFile=userFile.split("_")[0]
-                userFile = [userFile.split("/")[-1]]
+                if splitLine[1]=="rsID":
+                    f.write(l)
+                    continue
+                userFile = splitLine[0]; userFile=userFile.split("/")[-1]
+                userFile = [userFile.split("_")[0]]
                 rsID = [splitLine[0].split(":")[-1]]
                 userFile.extend(rsID)
                 userFile.extend(splitLine[1:])
@@ -66,7 +72,7 @@ def generateChromosomeDF(chromNum, path):
 
     Example of run: python genChromosomeTable.py 21 ./opensnp_txt_data
     """
-    df = pd.read_csv(filepath_or_buffer=path+"/chrom"+str(chromNum)+".txt",sep='\t', dtype=np.str)
+    df = pd.read_csv(filepath_or_buffer=path+"chrom"+str(chromNum)+".txt",delim_whitespace=True, dtype=np.str)
     return df
 
 if __name__ == '__main__':
