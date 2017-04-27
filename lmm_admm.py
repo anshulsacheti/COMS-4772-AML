@@ -17,6 +17,7 @@ def normalizeWithNan(ary):
 # Initialize data.
 n=435
 m=2707
+np.random.seed(15)
 
 X_ref = pickle.load(open("X.p", "rb")).as_matrix().astype("float64")
 X_NaN = X_ref.copy()
@@ -41,7 +42,7 @@ beta_k = np.random.rand(m,1)
 U_k = np.zeros([n,m])
 I = np.eye(n,m)
 
-multiplier = 1
+multiplier = 10
 gamma1 = 5 * multiplier
 gamma2 = 0.25 * multiplier
 gamma3 = 0.14 * multiplier
@@ -98,7 +99,7 @@ while updateVal:
     Xp2_k = (Y.dot(beta_k.T) + rho/2.*Xp_k - U_k).dot(
                         np.linalg.inv(beta_k.dot(beta_k.T)+rho/2.*np.eye(m)))
 
-    #U_k = U_k + alpha*(Xp_k-Xp2_k)
+    #U_k = alpha*(Xp_k-Xp2_k)
     # #pdb.set_trace()
     #Final update
     #U_k = U_k + alpha*(Y-Xp2_k.dot(beta_k))
@@ -122,6 +123,13 @@ while updateVal:
             diff += (Xp2_k[xy[0],xy[1]] + X_NaN[xy[0],xy[1]])**2
         diff = np.sqrt(diff)
         print "Distance between ADMM X, nonNaN locations X: {}".format(diff)
+
+        tmp = np.ma.array(X_NaN, mask=np.isnan(X_NaN)) # Use a mask to mark the NaNs
+        tmp1 = np.linalg.norm(tmp[~tmp.mask],1)
+        tmp2 = np.linalg.norm(tmp[~tmp.mask],2)
+        print "l1 norm percentage X\'\'/X_NaN : {}".format(np.linalg.norm(Xp2_k,1)/tmp1)
+        print "l2 norm percentage X\'\'/X_NaN : {}".format(np.linalg.norm(Xp2_k,2)/tmp2)
+
         print "Distance between real B: {}"
         #print Xp2_k
         print beta_k
