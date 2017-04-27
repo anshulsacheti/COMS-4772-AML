@@ -4,32 +4,49 @@ import cvxopt
 from cvxpy import *
 from fancyimpute import SoftImpute
 import pdb
+import cPickle as pickle
+import sklearn.preprocessing as skPP
+
+def normalizeWithNan(ary):
+    mean = np.nanmean(ary, axis=0)
+    stdd = np.nanstd(ary, axis=0)
+    ary = ary / mean
+    ary = ary * 1/stdd
+    return ary
 
 # Initialize data.
-n=10
-m=10
+n=435
+m=2707
 
-X_ref = np.random.rand(n,n)
-X = X_ref.copy()
-for i in xrange(n*2):
-    a=np.random.randint(n); b= np.random.randint(n);
-    X[a,b]=0
+X_ref = pickle.load(open("X.p", "rb")).as_matrix().astype("float64")
+X_NaN = X_ref.copy()
+X_nonNaN_loc = np.argwhere(np.invert(np.isnan(X_NaN)))
 
-X_k = X.copy()
-Xp_k = np.random.rand(n,n)
-Xp2_k = np.random.rand(n,n)
+X_ref_zeroed = np.nan_to_num(X_ref)
+X_ref = np.load("X_softImputed.npy").astype("float64")
+# for i in xrange(int(n*m*0.2)):
+#     a=np.random.randint(n); b= np.random.randint(m);
+#     X[a,b]=0
 
-Y = np.random.rand(n,1)
-sigma = np.identity(n)
-beta_k = np.random.rand(n,1)
+X_k = X_ref_zeroed.copy()
+Xp_k = np.random.rand(n,m)
+Xp2_k = np.random.rand(n,m)
 
-U_k = np.zeros([n,n])
-I = np.identity(n)
-gamma1 = 0.15
-gamma2 = 0.25
-gamma3 = 0.1
-rho = 0.1
-alpha = 0.1
+Y = pickle.load(open("Y.p", "rb")).as_matrix(columns=["Height"]).astype("float64")
+Y = normalizeWithNan(Y)
+sigma = pickle.load(open("V.p", "rb")).as_matrix().astype("float64")
+sigma = normalizeWithNan(sigma)
+beta_k = np.random.rand(m,1)
+
+U_k = np.zeros([n,m])
+I = np.eye(n,m)
+
+multiplier = 1
+gamma1 = 5 * multiplier
+gamma2 = 0.25 * multiplier
+gamma3 = 0.14 * multiplier
+rho = 0.1 * multiplier
+alpha = 0.1 * multiplier
 
 
 #CVXPY Solution
@@ -55,9 +72,10 @@ b_dist_old = 0
 
 print "Starting"
 updateVal = True
-
+iter = 0
 while updateVal:
     #print "Running iteration"
+    iter += 1
     X_old = Xp_k
     b_old = beta_k
 
@@ -65,19 +83,20 @@ while updateVal:
     beta_ols = np.linalg.inv(Xp2_k.T.dot(np.linalg.inv(sigma)).dot(
                                 Xp2_k)).dot(Xp2_k.T).dot(np.linalg.inv(sigma)).dot(Y)
     beta_k = np.multiply(np.sign(beta_ols),np.maximum(np.absolute(beta_ols)-gamma1,0.))
+    beta_k = beta_k.astype('float')
 
+    beta_k = skPP.scale(beta_k)
     u,s,v = np.linalg.svd((X_k*gamma2+Xp2_k*rho+U_k)/(gamma2+rho))
 
     #Soft Thresholding of Singular Value Decomp
     s = np.multiply(np.sign(s),np.maximum(np.absolute(s)-(gamma3/(gamma2+rho)),0.))
-    x = np.zeros((m,n))
-    x[:m,:m] = np.diag(s)
+    x = np.zeros((n,m))
+    x[:n,:n] = np.diag(s)
     s = x
-
     Xp_k = u.dot(s).dot(v.T)
 
-    Xp2_k = (Y.dot(beta_k.T) + rho/2.*Xp_k - U_k).dot(np.linalg.inv(
-                    beta_k.dot(beta_k.T)+rho/2.*np.eye(n)))
+    Xp2_k = (Y.dot(beta_k.T) + rho/2.*Xp_k - U_k).dot(
+                        np.linalg.inv(beta_k.dot(beta_k.T)+rho/2.*np.eye(m)))
 
     #U_k = U_k + alpha*(Xp_k-Xp2_k)
     # #pdb.set_trace()
@@ -90,12 +109,22 @@ while updateVal:
     x_dist = np.linalg.norm((Xp_k - X_old),2)
     b_dist = np.linalg.norm((beta_k - b_old),2)
     real_dist = np.linalg.norm(Xp2_k-X_ref,2)
-    if np.linalg.norm((Y-Xp2_k.dot(beta_k)),2)<4. and real_dist<6:
+    if np.linalg.norm((Y-Xp2_k.dot(beta_k)),2)<3e6 and real_dist<1e4:
+        print "Iter: {}".format(iter)
         print "Distance between ADMM x: {}".format(x_dist)
         print "Distance between ADMM b: {}".format(b_dist)
         print "Distance between constraint: {}".format(np.linalg.norm((Y-Xp2_k.dot(beta_k)),2))
-        print "Distance between real X: {}".format(np.linalg.norm(Xp2_k-X_ref,2))
-        #print beta_k
+        print "Distance between ADMM X, fancyimpute X: {}".format(np.linalg.norm(Xp2_k-X_ref,2))
+
+        diff = 0
+        for index in xrange(len(X_nonNaN_loc)):
+            xy = X_nonNaN_loc[index]
+            diff += (Xp2_k[xy[0],xy[1]] + X_NaN[xy[0],xy[1]])**2
+        diff = np.sqrt(diff)
+        print "Distance between ADMM X, nonNaN locations X: {}".format(diff)
+        print "Distance between real B: {}"
+        #print Xp2_k
+        print beta_k
         print "----"
         #pdb.set_trace()
     if x_dist<=1.0e-15 and b_dist<=1.0e-15:
