@@ -8,14 +8,15 @@ import cPickle as pickle
 import sklearn.preprocessing as skPP
 
 # Initialize data.
-n=100
-m=1000
+n=400
+m=400
 
 np.random.seed(15)
 
+percentMissing=0.1
 X_rand = np.random.rand(n,m)
 X = X_rand.copy()
-for i in xrange(n*2):
+for i in xrange(int(n*m*percentMissing)):
     a=np.random.randint(n); b= np.random.randint(m);
     X[a,b]=np.nan
 
@@ -35,15 +36,16 @@ Xp2_k = np.random.rand(n,m)
 Y = np.random.rand(n,1)
 sigma = np.random.rand(n,n)
 beta_k = np.random.rand(m,1)
+beta_rand = np.linalg.solve(X_rand,Y)
 
 U_k = np.zeros([n,m])
 I = np.eye(n,m)
 
 multiplier = 10
-gamma1 = 5 * multiplier
+gamma1 = 0.35 * multiplier
 gamma2 = 0.25 * multiplier
 gamma3 = 0.08 * multiplier
-rho = 0.1 * multiplier
+rho = 10 * multiplier
 alpha = 0.1 * multiplier
 
 x_dist_old = 0
@@ -81,6 +83,7 @@ while updateVal:
     beta_k = np.multiply(np.sign(beta_ols),np.maximum(np.absolute(beta_ols)-gamma1,0.))
     beta_k = beta_k.astype('float')
 
+    beta_k_unscaled = beta_k.copy()
     beta_k = skPP.scale(beta_k)
 
     # soft threshold should be iterative, with substitution for X_k
@@ -109,7 +112,7 @@ while updateVal:
 
     x_dist = np.linalg.norm((Xp_k - X_old),2)
     x_xp2_dist = np.linalg.norm((Xp2_k - Xp_k),2)
-    b_dist = np.linalg.norm((beta_k - b_old),2)
+    b_dist = np.linalg.norm((beta_k_unscaled - beta_rand),2)
     real_dist = np.linalg.norm(Xp2_k-X_rand,2)
 
     x_distl.append(x_dist)
@@ -136,10 +139,8 @@ while updateVal:
         diff = np.sqrt(diff)
         print "Distance between ADMM X, nonNaN locations X: {}".format(diff)
         obj_xdiff.append(gamma2*diff)
-
-        print "Distance between real B: {}"
         #print Xp2_k
-        print beta_k
+        #print beta_k
         print "----"
         #pdb.set_trace()
     if x_dist<=1.0e-15 and b_dist<=1.0e-15:
@@ -152,11 +153,22 @@ while updateVal:
     else:
         x_dist_old = x_dist
         b_dist_old = b_dist
-
-print X_k
-print beta_k
+# print X_k
+# print beta_k
+# print beta_k_unscaled
 
 plt.figure()
 plt.plot(real_distl)
-plt.title("per-iteration L2-norm of difference between X'' and simulated X")
+plt.plot(b_distl)
+#plt.title("(" + str(int(percentMissing*100)) + "% missing input) " + "per-iteration L2-norm of difference in beta")
+#plt.ylabel("Error")
+#plt.xlabel("Iterations")
+#plt.savefig(str(int(percentMissing*100))+'missing_beta.png', bbox_inches='tight')
+
+plt.figure()
+plt.plot(real_distl)
+#plt.title("(" + str(int(percentMissing*100)) + "% missing input) " + "per-iteration L2-norm of difference between X'' and simulated X")
+#plt.ylabel("Error")
+#plt.xlabel("Iterations")
+#plt.savefig(str(int(percentMissing*100))+'missing_x.png', bbox_inches='tight')
 plt.show()
